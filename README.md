@@ -52,6 +52,91 @@ python3 evals/eval_xor_retrieve.py \
     --data_file <path_to_input_data> \
     --pred_file <path_to_predictions>
 ```
+This leads to the following results:
+
+<table style="text-align: center;">
+  <tr>
+    <th>Model</th>
+    <th colspan="8">R@2k</th>
+    <th colspan="8">R@5k</th>
+  </tr>
+  <tr>
+      <td></td>
+      <th>Ar</th>
+      <th>Bn</th>
+      <th>Fi</th>
+      <th>Ja</th>
+      <th>Ko</th>
+      <th>Ru</th>
+      <th>te</th>
+      <th>Avg</th>
+      <th>Ar</th>
+      <th>Bn</th>
+      <th>Fi</th>
+      <th>Ja</th>
+      <th>Ko</th>
+      <th>Ru</th>
+      <th>te</th>
+      <th>Avg</th>
+  </tr>
+  <tr>
+      <td>CLASS-US</td>
+      <td>54.5</td>
+      <td>67.4</td>
+      <td>58.6</td>
+      <td>47.7</td>
+      <td>51.6</td>
+      <td>59.9</td>
+      <td>65.6</td>
+      <td>57.9</td>
+      <td>64.8</td>
+      <td>73.0</td>
+      <td>64.7</td>
+      <td>57.3</td>
+      <td>58.6</td>
+      <td>67.9</td>
+      <td>70.6</td>
+      <td>65.3</td>
+  </tr>
+  <tr>
+      <td>CLASS-ZS</td>
+      <td>59.2</td>
+      <td>70.1</td>
+      <td>59.9</td>
+      <td>51.5</td>
+      <td>57.2</td>
+      <td>51.5</td>
+      <td>72.3</td>
+      <td>60.2</td>
+      <td>66.7</td>
+      <td>78.6</td>
+      <td>66.6</td>
+      <td>60.2</td>
+      <td>63.2</td>
+      <td>58.2</td>
+      <td>78.2</td>
+      <td>67.4</td>
+  </tr>
+  <tr>
+      <td>CLASS</td>
+      <td>66.7</td>
+      <td>79.6</td>
+      <td>64.3</td>
+      <td>58.1</td>
+      <td>66.0</td>
+      <td>64.1</td>
+      <td>77.7</td>
+      <td>68.1</td>
+      <td>70.6</td>
+      <td>84.9</td>
+      <td>71.0</td>
+      <td>66.0</td>
+      <td>72.6</td>
+      <td>70.0</td>
+      <td>81.9</td>
+      <td>73.9</td>
+  </tr>
+</table>
 
 #### XOR-Full
 #### Retrieve
@@ -67,6 +152,55 @@ python3 evals/eval_xor_full.py \
     --data_file <path_to_input_data> \
     --pred_file <path_to_predictions>
 ```
+
+This leads to the following results:
+
+<table style="margin-left: auto; margin-right: auto; text-align: center;">
+  <tr>
+    <td>Model</td>
+    <th colspan="7">F1</th>
+    <th colspan="3">Macro Average</th>
+  </tr>
+  <tr>
+      <td></td>
+      <th>Ar</th>
+      <th>Bn</th>
+      <th>Fi</th>
+      <th>Ja</th>
+      <th>Ko</th>
+      <th>Ru</th>
+      <th>te</th>
+      <th>F1</th>
+      <th>EM</th>
+      <th>BLEU</th>
+  </tr>
+  <tr>
+      <td>CORA</td>
+      <td>42.9</td>
+      <td>26.9</td>
+      <td>41.4</td>
+      <td>36.8</td>
+      <td>30.4</td>
+      <td>33.9</td>
+      <td>30.9</td>
+      <td>34.7</td>
+      <td>25.8</td>
+      <td>23.3</td>
+  </tr>
+  <tr>
+      <td>CLASS</td>
+      <td>49.1</td>
+      <td>32.0</td>
+      <td>46.7</td>
+      <td>44.1</td>
+      <td>38.4</td>
+      <td>39.9</td>
+      <td>41.1</td>
+      <td>41.6</td>
+      <td>32.5</td>
+      <td>28.2</td>
+  </tr>
+</table>
 
 ### Training
 Please download the training data from [OneDrive](https://unimelbcloud-my.sharepoint.com/:f:/g/personal/jifj_student_unimelb_edu_au/EkkBMU65NG1LvGkBHKpMEvMB3QAlGT599dgL9wDNPCgUWw?e=eMQwHK) and put them on corresponding directories under `data`.
