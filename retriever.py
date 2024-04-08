@@ -169,9 +169,6 @@ def main():
                 all_scores = scores
                 psg_indices = indices
             else:
-                # for i in range(len(all_scores)):
-                #     all_scores[i] = np.concatenate((all_scores[i], scores[i]), axis=1)
-                #     psg_indices[i] = np.concatenate((psg_indices[i], indices[i]), axis=1)
                 def topk_by_sort(input, k, axis=None, ascending=True):
                     if not ascending:
                         input *= -1
@@ -188,7 +185,6 @@ def main():
                 ind, all_scores = topk_by_sort(all_scores, args.depth, axis=1, ascending=False)
                 psg_indices = np.take_along_axis(psg_indices, ind, axis=1)
 
-            # print(list(zip(all_scores[0], psg_indices[0])))
         logger.info('Index Search Finished')
     else:
         if '*' in args.passage_embeddings:

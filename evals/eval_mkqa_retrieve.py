@@ -108,6 +108,5 @@ def main():
     print(mean(avg_scores))
 
 
-
 if __name__ == "__main__":
     main()

@@ -90,10 +90,6 @@ class DataArguments:
     split: str = field(default='train', metadata={"help": "dataset splits"})
     normalize_text: bool = field(default=False, metadata={"help": "normalize text"})
     lower_case: bool = field(default=False, metadata={"help": "lower case text"})
-    add_lang_token: bool = field(default=False, metadata={"help": "add language token"})
-    load_partial: bool = field(default=False, metadata={"help": "load partial data"})
-    add_positive_passage: bool = field(default=False, metadata={"help": "add positive passage to the training data"})
-    lang: str = field(default="en", metadata={"help": "language"})
 
     max_query_length: int = field(
         default=512,
@@ -168,18 +164,10 @@ class BiEncoderTrainingArguments(TrainingArguments):
 
     retriever_weight: float = field(default=1.0, metadata={"help": "retriever weight"})
 
-    barlow_twins: bool = field(default=False, metadata={"help": "use barlow twins loss"})
-
     english_distill: bool = field(default=False, metadata={"help": "distillation from english teacher"})
-    multilingual_distill: bool = field(default=False, metadata={"help": "distillation from multilingual teacher"})
     parallel_queries: bool = field(default=False, metadata={"help": "use parallel queries"})
     wikidata: bool = field(default=False, metadata={"help": "use wikidata"})
     e2e_training: bool = field(default=False, metadata={"help": "end-to-end training"})
-    homogeneous_batch: bool = field(default=False, metadata={"help": "use homogeneous data (i.e. same languages) "
-                                                                     "within a batch"})
-
-    only_reader: bool = field(default=False, metadata={"help": "only train the reader component and "
-                                                               "keep the retriever component frozen"})
 
     eval_on_test: bool = field(default=False, metadata={"help": "evaluate on test set when training is done"})
     eval_on_mkqa: bool = field(default=False, metadata={"help": "evaluate on mkqa set when training is done"})
@@ -190,17 +178,7 @@ class BiEncoderTrainingArguments(TrainingArguments):
 
     eval_at_start: bool = field(default=False, metadata={"help": "evaluate at start of training"})
 
-    use_mcontriever: bool = field(default=False, metadata={"help": "use mcontriever model to retrieve relevant passages"
-                                                                   " in first k training steps"})
-    self_retrieve_steps: int = field(default=3000, metadata={"help": "number of steps to use self retriever"})
-
     de_avg_pooling: bool = field(default=False, metadata={"help": "use average pooling for dual-encoder"})
-
-    scheduler_type: str = field(default="linear_warmup", metadata={"help": "sheduler type"})
-
-    add_bias: bool = field(default=False, metadata={"help": "add bias to the cross-attention"})
-
-    retrieve_from_each_lang: bool = field(default=False, metadata={"help": "retrieve from each language"})
 
     @cached_property
     def _setup_devices(self) -> "torch.device":
@@ -236,27 +214,6 @@ class BiEncoderTrainingArguments(TrainingArguments):
 
 
 @dataclass
-class CrossEncoderTrainingArguments(BiEncoderTrainingArguments):
-    pass
-
-
-@dataclass
-class DynamicNegativeDistillTrainingArguments(BiEncoderTrainingArguments):
-    update_negative_steps: int = field(default=None, metadata={"help": "steps for updating negatives using the "
-                                                                       "latest retriever"})
-    update_negative: bool = field(default=True, metadata={"help": "whether to update hard negatives"})
-    passage_embeddings: str = field(default=None, metadata={"help": "path for storing passage embeddings"})
-    query_embeddings: str = field(default=None, metadata={"help": "path for storing query embeddings"})
-    retrieve_batch_size: int = field(default=5000, metadata={"help": "batch size for faiss search"})
-    depth: int = field(default=32, metadata={"help": "top-k negatives"})
-
-
-@dataclass
-class OnTheFlyNegativeDistillTrainingArguments(DynamicNegativeDistillTrainingArguments):
-    pass
-
-
-@dataclass
 class DistilModelArguments(ModelArguments):
     teacher_model_name_or_path: Optional[str] = field(
         default=None, metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
@@ -267,7 +224,3 @@ class DistilModelArguments(ModelArguments):
     teacher_tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as teacher_model_name"}
     )
-    self_distill: bool = field(default=False, metadata={"help": "use self-distillation on crop sentences or not"})
-    distill: bool = field(default=False, metadata={"help": "take the crop-sent trained dual-encoder as teacher, and "
-                                                           "distill the knowledge to a cross-encoder"})
-    enc_dec: bool = field(default=False, metadata={"help": "use full encoder-decoder structure of T5 for reranking"})

@@ -125,36 +125,6 @@ def calculate_f1_em_bleu(dataset, predictions):
     return lang_dict
 
 
-def calculate_f1_em_bleu_significant(dataset, predictions):
-    outputs = []
-    for qa in dataset:
-        lang = qa["lang"]
-        gts = qa["answers"]
-        if gts[0] == "No Answer":
-            continue
-        q_id = qa["id"]
-        if q_id not in predictions:
-            print("no answers")
-            continue
-        pred = predictions[q_id]
-        if isinstance(gts, str):
-            gts = [gts]
-
-        final_gts = []
-        # for japanese, we need to tokenize the input as there are no white spaces.
-        if lang == "ja":
-            for gt in gts:
-                gt = wakati.parse(gt)
-                final_gts.append(gt)
-            final_pred = wakati.parse(pred.replace("・", " ").replace("、", ","))
-        else:
-            final_gts = gts
-            final_pred = pred
-        outputs.append((q_id, metric_max_over_ground_truths(
-            f1_score, final_pred, final_gts)))
-    return outputs
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_file",
@@ -162,7 +132,6 @@ def main():
     parser.add_argument("--pred_file",
                         default=None, type=str)
     parser.add_argument("--txt_file", action="store_true")
-    parser.add_argument("--significant", action="store_true")
 
     args = parser.parse_args()
 
@@ -176,32 +145,26 @@ def main():
         with open(args.pred_file) as prediction_file:
             predictions = json.load(prediction_file)
 
-    if args.significant:
-        outputs = calculate_f1_em_bleu_significant(dataset, predictions)
-        with open("significant.txt", "w") as f:
-            for q_id, f1 in outputs:
-                f.write("{0}\t{1}\n".format(q_id, f1))
-    else:
-        results = calculate_f1_em_bleu(dataset, predictions)
+    results = calculate_f1_em_bleu(dataset, predictions)
 
-        f1_total, em_total, bleu_total = 0.0, 0.0, 0.0
-        total_num = 0
-        lang_count = 0
-        for lang in results:
-            if results[lang]["count"] == 0:
-                continue
-            lang_count += 1
-            f1_total += results[lang]["f1"]
-            em_total += results[lang]["em"]
-            bleu_total += results[lang]["bleu"]
-            total_num += results[lang]["count"]
-            print("Evaluating the performance on {0} for {1} examples".format(
-                lang, results[lang]["count"]))
-            print("F1: {0}, EM:{1}, BLEU:{2}".format(
-                results[lang]["f1"] * 100, results[lang]["em"] * 100, results[lang]["bleu"] * 100))
-        print("avg f1: {}".format(f1_total / lang_count * 100))
-        print("avg em: {}".format(em_total / lang_count * 100))
-        print("avg bleu: {}".format(bleu_total / lang_count * 100))
+    f1_total, em_total, bleu_total = 0.0, 0.0, 0.0
+    total_num = 0
+    lang_count = 0
+    for lang in results:
+        if results[lang]["count"] == 0:
+            continue
+        lang_count += 1
+        f1_total += results[lang]["f1"]
+        em_total += results[lang]["em"]
+        bleu_total += results[lang]["bleu"]
+        total_num += results[lang]["count"]
+        print("Evaluating the performance on {0} for {1} examples".format(
+            lang, results[lang]["count"]))
+        print("F1: {0}, EM:{1}, BLEU:{2}".format(
+            results[lang]["f1"] * 100, results[lang]["em"] * 100, results[lang]["bleu"] * 100))
+    print("avg f1: {}".format(f1_total / lang_count * 100))
+    print("avg em: {}".format(em_total / lang_count * 100))
+    print("avg bleu: {}".format(bleu_total / lang_count * 100))
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from transformers import (
 
 from arguments import ModelArguments, DataArguments, BiEncoderTrainingArguments as TrainingArguments
 from dataloader import EncodeDataset, EncodeCollator, GenericDataLoader
-from model import BiEncoder
+from model import RRForConditionalGeneration
 
 logger = logging.getLogger(__name__)
 
@@ -50,23 +50,11 @@ def main():
         use_fast=False,
     )
 
-    if training_args.separate_joint_encoding:
-        from model import RRForConditionalGeneration
-        model = RRForConditionalGeneration.from_pretrained(
-            model_args.model_name_or_path,
-            config=config,
-            cache_dir=model_args.cache_dir
-        )
-        # model.encoder.copy_relative_attention_bias()
-        # model.decoder.copy_relative_attention_bias()
-    else:
-        model = BiEncoder.build(
-            model_args,
-            data_args,
-            training_args,
-            config=config,
-            cache_dir=model_args.cache_dir,
-        )
+    model = RRForConditionalGeneration.from_pretrained(
+        model_args.model_name_or_path,
+        config=config,
+        cache_dir=model_args.cache_dir
+    )
 
     text_max_length = data_args.max_query_length if data_args.encode_is_qry else data_args.max_passage_length
 
@@ -82,8 +70,6 @@ def main():
     else:
         corpus = GenericDataLoader(data_args.train_dir, corpus_file=data_args.corpus_file,
                                    query_file=data_args.query_file).load_corpus()
-        from utils import group_corpus_by_langs
-        corpus = group_corpus_by_langs(corpus)[data_args.lang]
         shard_size = len(corpus) // encode_num_shard
         start = encode_shard_index * shard_size
         end = (encode_shard_index + 1) * shard_size if encode_shard_index + 1 != encode_num_shard else len(corpus)
@@ -92,10 +78,7 @@ def main():
                                    max_length=text_max_length, is_query=data_args.encode_is_qry,
                                    start=start, end=end, normalize_text=data_args.normalize_text,
                                    lower_case=data_args.lower_case,
-                                   separate_joint_encoding=training_args.separate_joint_encoding,
-                                   add_lang_token=data_args.add_lang_token,
-                                   eval_mode=True,
-                                   task=data_args.task)
+                                   separate_joint_encoding=training_args.separate_joint_encoding)
     encode_loader = DataLoader(
         encode_dataset,
         batch_size=training_args.per_device_eval_batch_size * training_args.n_gpu,
@@ -134,8 +117,6 @@ def main():
                 if data_args.encode_is_qry:
                     if training_args.separate_joint_encoding:
                         query_vector = model(query=batch, only_encoding=True).query_vector
-                        # print(query_vector[0])
-                        # exit(-1)
                     else:
                         if training_args.n_gpu > 1:
                             query_vector = model(query=batch.data, only_query=True).query_vector
@@ -145,8 +126,6 @@ def main():
                 else:
                     if training_args.separate_joint_encoding:
                         passage_vector = model(passage=batch, only_encoding=True).passage_vector
-                        # print(passage_vector[0], batch_ids[0])
-                        # exit(-1)
                     else:
                         if training_args.n_gpu > 1:
                             passage_vector = model(passage=batch.data, only_passage=True).passage_vector

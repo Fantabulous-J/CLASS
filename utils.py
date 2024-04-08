@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import pickle
@@ -8,29 +7,12 @@ import subprocess
 import unicodedata
 from typing import Tuple
 
-import numpy as np
 import regex
 import torch
 import torch.distributed as dist
 from torch.utils.checkpoint import get_device_states, set_device_states
 
 logger = logging.getLogger(__name__)
-
-langid_to_lang = {
-    "ar": "Arabic",
-    "bn": "Bengali",
-    "en": "English",
-    "es": "Spanish",
-    "fi": "Finnish",
-    "he": "Hebrew",
-    "id": "Indonesian",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "ru": "Russian",
-    "sv": "Swedish",
-    "te": "Telugu",
-    "th": "Thai",
-}
 
 
 class AverageMeter(object):
@@ -511,50 +493,3 @@ def compute_colbert_scores(query_vector, passage_vector, query_mask, passage_mas
     scores = torch.sum(scores, dim=-1) / query_mask.sum(dim=1)[..., None]
 
     return scores
-
-
-def group_corpus_by_langs(corpus):
-    corpus_dict = {
-        "ar": {},
-        "bn": {},
-        "en": {},
-        "es": {},
-        "fi": {},
-        "he": {},
-        "id": {},
-        "ko": {},
-        "ru": {},
-        "sv": {},
-        "te": {},
-        "ja": {},
-        "th": {}
-    }
-    for idx, (pid, text) in enumerate(corpus.items()):
-        if 1 <= idx + 1 <= 18003200:
-            corpus_dict["en"][pid] = text
-        elif 18003201 <= idx + 1 <= 19308028:
-            corpus_dict["ar"][pid] = text
-        elif 19308029 <= idx + 1 <= 19487964:
-            corpus_dict["bn"][pid] = text
-        elif 19487965 <= idx + 1 <= 25226448:
-            corpus_dict["es"][pid] = text
-        elif 25226449 <= idx + 1 <= 26113043:
-            corpus_dict["fi"][pid] = text
-        elif 26113044 <= idx + 1 <= 27158298:
-            corpus_dict["he"][pid] = text
-        elif 27158299 <= idx + 1 <= 27978870:
-            corpus_dict["id"][pid] = text
-        elif 27978871 <= idx + 1 <= 28617734:
-            corpus_dict["ko"][pid] = text
-        elif 28617735 <= idx + 1 <= 33163369:
-            corpus_dict["ru"][pid] = text
-        elif 33163370 <= idx + 1 <= 37689064:
-            corpus_dict["sv"][pid] = text
-        elif 37689065 <= idx + 1 <= 37963294:
-            corpus_dict["te"][pid] = text
-        elif 37963295 <= idx + 1 <= 43080199:
-            corpus_dict["ja"][pid] = text
-        elif 43080200 <= idx + 1 <= 43600337:
-            corpus_dict["th"][pid] = text
-
-    return corpus_dict

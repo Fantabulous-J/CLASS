@@ -23,77 +23,10 @@ logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR
 logger = logging.getLogger(__name__)
 
 
-class MemoryMappedDataset(Dataset):
-    def __init__(self, path):
-        self.file = open(path, mode="r")
-        self.mm = mmap.mmap(self.file.fileno(), 0, prot=mmap.PROT_READ)
-        self.offset_dict = {0: self.mm.tell()}
-        line = self.mm.readline()
-        self.count = 0
-        while line:
-            self.count += 1
-            offset = self.mm.tell()
-            self.offset_dict[self.count] = offset
-            line = self.mm.readline()
-
-    def __len__(self):
-        return self.count
-
-    def process_line(self, line):
-        return line
-
-    def __getitem__(self, index):
-        offset = self.offset_dict[index]
-        self.mm.seek(offset)
-        line = self.mm.readline()
-        return self.process_line(line)
-
-
-class JsonlDataset(MemoryMappedDataset):
-    def __init__(self, path):
-        super(JsonlDataset, self).__init__(path)
-
-    def __getitem__(self, index):
-        try:
-            return super(JsonlDataset, self).__getitem__(eval(index))
-        except:
-            return super(JsonlDataset, self).__getitem__(index)
-
-    def process_line(self, line):
-        return json.loads(line)
-
-
-class QueryDataset(MemoryMappedDataset):
-    def __init__(self, path):
-        super(QueryDataset, self).__init__(path)
-
-    def __getitem__(self, index):
-        return super(QueryDataset, self).__getitem__(eval(index))
-
-    def process_line(self, line):
-        query_id, text = line.decode().strip().split('\t')
-        return text
-
-
-class PassageDataset(MemoryMappedDataset):
-    def __init__(self, path):
-        super(PassageDataset, self).__init__(path)
-
-    def __getitem__(self, index):
-        return super(PassageDataset, self).__getitem__(eval(index))
-
-    def process_line(self, line):
-        pid, text, title = line.strip().split('\t')
-        return {
-            'text': text,
-            'title': title,
-        }
-
-
 class GenericDataLoader:
 
     def __init__(self, data_folder: str = None, corpus_file: str = "corpus.tsv", query_file: str = "train.query.txt",
-                 qrel_file: str = "train-hard-negatives.jsonl", use_mmap: bool = False):
+                 qrel_file: str = "train-hard-negatives.jsonl"):
         self.corpus = {}
         self.queries = {}
         self.qrels = []
@@ -101,8 +34,6 @@ class GenericDataLoader:
         self.corpus_file = os.path.join(data_folder, corpus_file) if data_folder else corpus_file
         self.query_file = os.path.join(data_folder, query_file) if data_folder else query_file
         self.qrel_file = os.path.join(data_folder, qrel_file) if data_folder else qrel_file
-
-        self.use_mmap = use_mmap
 
     @staticmethod
     def check(fIn: str, ext: str):
@@ -144,21 +75,17 @@ class GenericDataLoader:
         logger.info("Loading Queries...")
         self.queries = self._load_queries(self.query_file)
         logger.info("Loaded %d Queries.", len(self.queries))
-        logger.info("Query Example: %s",
-                    list(self.queries.values())[0] if not self.use_mmap else self.queries['0'])
+        logger.info("Query Example: %s", self.queries['0'] )
 
         return self.queries
 
     def load_qrels(self):
         def _load_qrels(qrel_file):
-            if self.use_mmap:
-                qrels = JsonlDataset(qrel_file)
-            else:
-                qrels = []
-                with open(qrel_file, 'r') as f:
-                    for jsonline in tqdm(f.readlines()):
-                        example = json.loads(jsonline)
-                        qrels.append(example)
+            qrels = []
+            with open(qrel_file, 'r') as f:
+                for jsonline in tqdm(f.readlines()):
+                    example = json.loads(jsonline)
+                    qrels.append(example)
             return qrels
 
         self.qrels = _load_qrels(self.qrel_file)
@@ -166,52 +93,35 @@ class GenericDataLoader:
 
     def _load_corpus(self):
         if self.corpus_file.endswith('jsonl'):
-            if self.use_mmap:
-                self.corpus = JsonlDataset(self.corpus_file)
-            else:
-                with open(self.corpus_file, encoding='utf-8') as fIn:
-                    for jsonline in tqdm(fIn):
-                        example = json.loads(jsonline)
-                        self.corpus[example['pid']] = jsonline
+            with open(self.corpus_file, encoding='utf-8') as fIn:
+                for jsonline in tqdm(fIn):
+                    example = json.loads(jsonline)
+                    self.corpus[example['pid']] = jsonline
         else:
             self.check(fIn=self.corpus_file, ext="tsv")
-            if self.use_mmap:
-                self.corpus = PassageDataset(self.corpus_file)
-            else:
-                normalize = "all_w100.tsv" in self.corpus_file
-                if normalize:
-                    import unicodedata
-                with open(self.corpus_file, encoding='utf-8') as fIn:
-                    reader = csv.reader(fIn, delimiter="\t")
-                    for row in tqdm(reader):
-                        if not row[0] == "id":
-                            self.corpus[row[0]] = {
-                                "title": row[2] if not normalize else unicodedata.normalize('NFC', row[2]),
-                                "text": row[1]
-                            }
+            normalize = "all_w100.tsv" in self.corpus_file
+            if normalize:
+                import unicodedata
+            with open(self.corpus_file, encoding='utf-8') as fIn:
+                reader = csv.reader(fIn, delimiter="\t")
+                for row in tqdm(reader):
+                    if not row[0] == "id":
+                        self.corpus[row[0]] = {
+                            "title": row[2] if not normalize else unicodedata.normalize('NFC', row[2]),
+                            "text": row[1]
+                        }
 
     def _load_queries(self, query_file):
         queries = {}
         if query_file.endswith('jsonl'):
-            if self.use_mmap:
-                queries = JsonlDataset(query_file)
-            else:
-                with open(query_file, encoding='utf-8') as fIn:
-                    for jsonline in fIn.readlines():
-                        example = json.loads(jsonline)
-                        lang = example['lang'].strip() if isinstance(example['lang'], str) else example['lang']
-                        if "cl_answers" in example:
-                            if 'pos_pids' in example:
-                                queries[example['id']] = (example['question'], example['answers'],
-                                                          example['cl_answers'], example['pos_pids'], lang)
-                            else:
-                                queries[example['id']] = (example['question'], example['answers'],
-                                                          example['cl_answers'], lang)
-                        elif 'answers' in example:
-                            queries[example['id']] = (example['question'], example['answers'], lang)
-                        else:
-                            queries[example['id']] = (example['question'], ['placeholder'], lang)
-                        # queries[example['id']] = example['question']
+            with open(query_file, encoding='utf-8') as fIn:
+                for jsonline in fIn.readlines():
+                    example = json.loads(jsonline)
+                    lang = example['lang'].strip() if isinstance(example['lang'], str) else example['lang']
+                    if 'answers' in example:
+                        queries[example['id']] = (example['question'], example['answers'], lang)
+                    else:
+                        queries[example['id']] = (example['question'], ['placeholder'], lang)
         elif query_file.endswith('csv'):
             with open(query_file, 'r') as fIn:
                 reader = csv.reader(fIn, delimiter='\t')
@@ -223,26 +133,23 @@ class GenericDataLoader:
                     else:
                         queries[str(idx)] = (query, answers, 'en')
         else:
-            if self.use_mmap:
-                queries = QueryDataset(query_file)
-            else:
-                with open(query_file, encoding='utf-8') as fIn:
-                    for line in fIn:
+            with open(query_file, encoding='utf-8') as fIn:
+                for line in fIn:
+                    try:
+                        query_id, text, trans_text, answer = line.strip().split('\t')
+                        lang = 'en' if 'parallel' in query_file else query_id.split("-")[0]
+                        queries[query_id] = ([text, trans_text], [answer], lang)
+                    except ValueError:
                         try:
-                            query_id, text, trans_text, answer = line.strip().split('\t')
-                            lang = 'en' if 'parallel' in query_file else query_id.split("-")[0]
-                            queries[query_id] = ([text, trans_text], [answer], lang)
+                            query_id, text, answer = line.strip().split('\t')
+                            lang = 'en'
+                            if query_id.split("-")[0] in ['ar', 'bn', 'de', 'es', 'fi', 'fr', 'it', 'ja', 'ko',
+                                                          'ru', 'te', 'ta', 'ml', 'kn', 'zh']:
+                                lang = query_id.split("-")[0]
+                            queries[query_id] = (text, [answer], lang)
                         except ValueError:
-                            try:
-                                query_id, text, answer = line.strip().split('\t')
-                                lang = 'en'
-                                if query_id.split("-")[0] in ['ar', 'bn', 'de', 'es', 'fi', 'fr', 'it', 'ja', 'ko',
-                                                              'ru', 'te', 'ta', 'ml', 'kn', 'zh']:
-                                    lang = query_id.split("-")[0]
-                                queries[query_id] = (text, [answer], lang)
-                            except ValueError:
-                                query_id, text = line.strip().split('\t')
-                                queries[query_id] = text
+                            query_id, text = line.strip().split('\t')
+                            queries[query_id] = text
 
         return queries
 
@@ -253,10 +160,7 @@ class ReaderDataset(Dataset):
                  corpus,
                  tokenizer: PreTrainedTokenizer,
                  train_path: Union[str, List],
-                 data_args: DataArguments,
-                 eval_mode: bool = False,
-                 num_examples: int = -1,
-                 answer_in_en: bool = False,):
+                 data_args: DataArguments,):
         super(ReaderDataset, self).__init__()
 
         self.queries = queries
@@ -264,27 +168,12 @@ class ReaderDataset(Dataset):
 
         self.tokenizer = tokenizer
         self.data_args = data_args
-        self.eval_mode = eval_mode
-        self.num_examples = num_examples
-        self.answer_in_en = answer_in_en
 
         if isinstance(train_path, str):
             if train_path.endswith(".jsonl"):
                 with open(train_path) as f:
-                    # self.examples = [json.loads(jsonline) for jsonline in f.readlines()]
-                    if self.data_args.load_partial:
-                        self.examples = [json.loads(jsonline) for jsonline in f.readlines()[:(800 * 2000)]]
-                    else:
-                        self.examples = [json.loads(jsonline) for jsonline in f.readlines()]
-                if len(queries) == 2103:
-                    new_examples = []
-                    for example in self.examples:
-                        if isinstance(example, str):
-                            example = json.loads(example)
-                        qid = example['qid']
-                        if qid in queries:
-                            new_examples.append(example)
-                    self.examples = new_examples
+                    self.examples = [json.loads(jsonline) for jsonline in f.readlines()]
+
             elif train_path.endswith('.json'):
                 with open(train_path) as f:
                     self.examples = json.load(f)
@@ -299,22 +188,11 @@ class ReaderDataset(Dataset):
             assert isinstance(train_path, List), type(train_path)
             self.examples = train_path
 
-        self.cl_qids = set()
-        with open('data/XOR-Retrieve/xor_train_retrieve_eng_span.jsonl') as f:
-            for jsonline in f:
-                example = json.loads(jsonline)
-                self.cl_qids.add(example['id'])
-
     def __len__(self):
-        return self.num_examples if self.num_examples > 0 else len(self.examples)
+        return len(self.examples)
 
     def __getitem__(self, idx):
-        if self.num_examples > 0:
-            example = self.examples[idx % len(self.examples)]
-        else:
-            example = self.examples[idx]
-        if isinstance(example, str):
-            example = json.loads(example)
+        example = self.examples[idx]
 
         if 'ctxs' in example:
             query, answers, ctxs = example['question'], example['answers'], example['ctxs']
@@ -327,17 +205,10 @@ class ReaderDataset(Dataset):
 
             return idx, query, passages, answer, [ctx['id'] for ctx in ctxs]
         else:
-            cl_answers = None
-            pos_pids = None
             qid, pids = example['qid'], example['pids']
             assert len(pids) >= self.data_args.train_n_passages, len(pids)
 
-            if len(self.queries[qid]) == 5:
-                query, answers, cl_answers, pos_pids, lang = self.queries[qid]
-            elif len(self.queries[qid]) == 4:
-                query, answers, cl_answers, lang = self.queries[qid]
-            else:
-                query, answers, lang = self.queries[qid]
+            query, answers, lang = self.queries[qid]
 
             if len(self.examples) == 64000 and isinstance(query, list):
                 assert len(query) == 2, query
@@ -359,72 +230,15 @@ class ReaderDataset(Dataset):
                 if lang != 'en':
                     query = normalize_text.normalize(query)
                 query = f"question: {query}"
-            if cl_answers is not None and random.random() <= 0.1:
-                answer = random.choice(list(cl_answers.items()))
-            else:
-                wiki_trans, normal_answers = [], []
-                for answer in answers:
-                    if isinstance(answer, dict):
-                        wiki_trans.append(tuple(answer.items())[0])
-                    else:
-                        normal_answers.append(answer)
-                if len(wiki_trans) != 0:
-                    answers = wiki_trans
-                else:
-                    answers = normal_answers
-                answer = random.choice(answers)
-            change_lang = qid in self.cl_qids
-            if isinstance(answer, tuple):
-                lang, answer = answer
-                change_lang = False
 
-            if self.data_args.add_lang_token:
-                if self.data_args.task == "XOR-Retrieve" and self.eval_mode:
-                    lang = "en"
-                if change_lang and not self.eval_mode:
-                    lang = "en"
-                if self.answer_in_en:
-                    lang = "en"
-                query = f"Answer in {langid_to_lang[lang]}: {query}"
-
-            if self.data_args.add_positive_passage and not self.eval_mode and self.data_args.train_n_passages > 1:
-                concat_string_tokens = []
-                for pid in pids[:self.data_args.train_n_passages]:
-                    if isinstance(pid, tuple):
-                        pid, score = pid
-                    tokenized_text = word_tokenize(self.corpus[pid]['text'])
-                    concat_string_tokens += tokenized_text
-                if answer not in concat_string_tokens:
-                    hit = False
-                    for alt_answer in answers + [] if cl_answers is None else list(cl_answers.values()):
-                        if alt_answer != answer and alt_answer in concat_string_tokens:
-                            hit = True
-                            break
-                    if not hit:
-                        pos_pid = random.choice(pos_pids)
-                        random_index = random.randint(0, len(pids) - 1)
-                        _ = pids.pop(random_index)
-                        random_index = random.randint(0, len(pids))
-                        pids.insert(random_index, pos_pid)
-                assert len(pids) >= self.data_args.train_n_passages, len(pids)
+            answer = random.choice(answers)
 
             passages = []
-            if self.data_args.train_n_passages == 1 and not self.eval_mode:
-                random.shuffle(pids)
+            for pid in pids[:self.data_args.train_n_passages]:
+                title, text = self.corpus[pid]['title'], self.corpus[pid]['text']
+                passages.append("title: " + title + " context: " + text)
 
-            train_n_passages = 100 if self.eval_mode and self.data_args.train_n_passages == 1 \
-                else self.data_args.train_n_passages
-            for pid in pids[:train_n_passages]:
-                if isinstance(pid, tuple):
-                    pid, score = pid
-                if isinstance(self.corpus[pid], dict):
-                    title, text = self.corpus[pid]['title'], self.corpus[pid]['text']
-                    passages.append("title: " + title + " context: " + text)
-                else:
-                    assert isinstance(self.corpus[pid], str), type(self.corpus[pid])
-                    passages.append(json.loads(self.corpus[pid])['text'])
-
-            return qid, query, passages, answer, pids[:train_n_passages]
+            return qid, query, passages, answer, pids[:self.data_args.train_n_passages]
 
 
 class EncodeDataset(Dataset):
@@ -439,9 +253,7 @@ class EncodeDataset(Dataset):
                  add_lang_token: bool = False,
                  start: int = 0,
                  end: int = 0,
-                 sep: str = " ",
-                 eval_mode: bool = False,
-                 task: str = "XOR-Retrieve"):
+                 sep: str = " ",):
         super(EncodeDataset, self).__init__()
 
         self.tokenizer = tokenizer
@@ -462,8 +274,6 @@ class EncodeDataset(Dataset):
         self.start = start
         self.end = end
         self.sep = sep
-        self.eval_mode = eval_mode
-        self.task = task
 
     def __len__(self):
         return len(self.data)
@@ -473,21 +283,13 @@ class EncodeDataset(Dataset):
 
         if isinstance(self.tokenizer, (MT5Tokenizer, MT5TokenizerFast, T5Tokenizer, T5TokenizerFast)):
             if self.is_query:
-                # lang = None
                 if isinstance(text, tuple):
-                    # lang = text[-1]
                     text = text[0]
                     if isinstance(text, list):
                         assert len(text) == 2, text
-                        # text = text[0]
-                        # todo: use noisy queries for retrieval (i.e., keep retrieval and training consistent)
                         text = text[1]
                     text = normalize_text.normalize(text)
                 text = "question: " + text
-                # if self.add_lang_token and lang:
-                #     if self.task == "XOR-Retrieve" and self.eval_mode:
-                #         lang = "en"
-                #     text = f"Answer in {langid_to_lang[lang]}: {text}"
             else:
                 text = "title: " + text['title'] + " context: " + text['text']
         else:
@@ -522,70 +324,6 @@ class EncodeDataset(Dataset):
         return text_id, encoded_text
 
 
-class CXMIDataset(Dataset):
-    def __init__(self,
-                 queries,
-                 corpus,
-                 tokenizer: PreTrainedTokenizer,
-                 train_path: Union[str, List],
-                 data_args: DataArguments, ):
-        super(CXMIDataset, self).__init__()
-        self.queries = queries
-        self.corpus = corpus
-        self.tokenizer = tokenizer
-        self.data_args = data_args
-
-        if isinstance(train_path, str):
-            with open(train_path) as f:
-                examples = [json.loads(jsonline) for jsonline in f.readlines()]
-        else:
-            assert isinstance(train_path, List), type(train_path)
-            examples = train_path
-
-        self.examples = []
-        for example in examples:
-            qid, pids = example['qid'], example['pids']
-            query = self.queries[qid]
-            cl_answers, pos_pids = None, None
-            if len(query) == 5:
-                query, answers, cl_answers, pos_pids, lang = self.queries[qid]
-            elif len(query) == 4:
-                query, answers, cl_answers, lang = self.queries[qid]
-            else:
-                query, answers, lang = self.queries[qid]
-            if pos_pids is not None:
-                pids.extend(pos_pids)
-            for answer in answers:
-                self.examples.append((qid, query, answer, None, lang))
-                for pid in pids:
-                    self.examples.append((qid, query, answer, pid, lang))
-            if cl_answers is not None:
-                for lang, answer in cl_answers.items():
-                    self.examples.append((qid, query, answer, None, lang))
-                    for pid in pids:
-                        self.examples.append((qid, query, answer, pid, lang))
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        qid, query, answer, pid, lang = self.examples[idx]
-
-        if lang != 'en':
-            query = normalize_text.normalize(query)
-        query = f"question: {query}"
-        if self.data_args.add_lang_token:
-            query = f"Answer in {langid_to_lang[lang]}: {query}"
-
-        if pid is not None:
-            title, text = self.corpus[pid]['title'], self.corpus[pid]['text']
-            passages = ["title: " + title + " context: " + text]
-        else:
-            passages = [""]
-
-        return qid, query, passages, answer, [pid]
-
-
 @dataclass
 class ReaderCollator(DataCollatorWithPadding):
     max_query_length: int = 50
@@ -604,54 +342,20 @@ class ReaderCollator(DataCollatorWithPadding):
         batch_input_ids = []
         batch_attention_mask, batch_independent_mask, batch_query_mask, batch_passage_mask = [], [], [], []
         for query, passages in zip(batch_query, batch_passage):
-            # query_ids = self.tokenizer.encode(query, add_special_tokens=False)[:self.max_query_passage_length - 3]
-            instruction = None
-            for language in langid_to_lang.values():
-                if f"Answer in {language}: " in query:
-                    query = query.split(f"Answer in {language}: ", 1)[1]
-                    instruction = f"Answer in {language}: "
-                    break
-            # print(instruction, query)
-            instruction_ids = None
-            if instruction is None:
-                query_ids = tokenizer.encode(query, add_special_tokens=False)[:self.max_query_length]
-            else:
-                instruction_ids = tokenizer.encode(instruction, add_special_tokens=False)
-                query_ids = tokenizer.encode(query, add_special_tokens=False)[
-                            :self.max_query_length - len(instruction_ids)]
+            query_ids = tokenizer.encode(query, add_special_tokens=False)[:self.max_query_length]
             for passage in passages:
-                # passage_ids = self.tokenizer.encode(passage, add_special_tokens=True,
-                #                                     max_length=self.max_query_passage_length - len(query_ids))
-                if isinstance(passage, str):
-                    passage_ids = tokenizer.encode(passage, add_special_tokens=True, max_length=self.max_passage_length)
-                else:
-                    assert isinstance(passage, list), type(passage)
-                    passage_ids = passage
-                if instruction_ids is not None:
-                    query_passage_ids = instruction_ids + query_ids + passage_ids
+                passage_ids = tokenizer.encode(passage, add_special_tokens=True, max_length=self.max_passage_length)
+                query_passage_ids = query_ids + passage_ids
 
-                    padded_length = self.max_query_passage_length - len(query_passage_ids)
-                    attention_mask = [1] * len(query_passage_ids) + [0] * padded_length
-                    query_mask = [0] * len(instruction_ids) + [1] * len(query_ids) + [0] * (
-                                len(passage_ids) + padded_length)
-                    passage_mask = [0] * len(instruction_ids) + [0] * len(query_ids) + [1] * len(passage_ids) + [
-                        0] * padded_length
-                    independent_mask = torch.zeros(self.max_query_passage_length, self.max_query_passage_length,
-                                                   dtype=torch.long)
-                    independent_mask[:len(instruction_ids), :len(instruction_ids)] = 1
-                    independent_mask[len(instruction_ids): len(instruction_ids) + len(query_ids), len(instruction_ids): len(instruction_ids) + len(query_ids)] = 1
-                    independent_mask[len(instruction_ids) + len(query_ids):, len(instruction_ids) + len(query_ids): len(query_passage_ids)] = 1
-                else:
-                    query_passage_ids = query_ids + passage_ids
+                padded_length = self.max_query_passage_length - len(query_passage_ids)
+                attention_mask = [1] * len(query_passage_ids) + [0] * padded_length
+                query_mask = [1] * len(query_ids) + [0] * (len(passage_ids) + padded_length)
+                passage_mask = [0] * len(query_ids) + [1] * len(passage_ids) + [0] * padded_length
+                independent_mask = torch.zeros(self.max_query_passage_length, self.max_query_passage_length,
+                                               dtype=torch.long)
+                independent_mask[:len(query_ids), :len(query_ids)] = 1
+                independent_mask[len(query_ids):, len(query_ids): len(query_passage_ids)] = 1
 
-                    padded_length = self.max_query_passage_length - len(query_passage_ids)
-                    attention_mask = [1] * len(query_passage_ids) + [0] * padded_length
-                    query_mask = [1] * len(query_ids) + [0] * (len(passage_ids) + padded_length)
-                    passage_mask = [0] * len(query_ids) + [1] * len(passage_ids) + [0] * padded_length
-                    independent_mask = torch.zeros(self.max_query_passage_length, self.max_query_passage_length,
-                                                   dtype=torch.long)
-                    independent_mask[:len(query_ids), :len(query_ids)] = 1
-                    independent_mask[len(query_ids):, len(query_ids): len(query_passage_ids)] = 1
                 batch_input_ids.append(query_passage_ids + [pad_token_id] * padded_length)
                 batch_attention_mask.append(attention_mask)
                 batch_independent_mask.append(independent_mask)
