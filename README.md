@@ -224,3 +224,6 @@ bash scripts/XOR-Retrieve/train_iterative_reader.sh
 The training pipeline for XOR-Full is the same, please find corresponding scripts under ```scripts/XOR-Full``` for steps 2, 3 and 4.
 
 We use slurm for training on 32 80G A100 for stage-1 and 16 A100 for the rest.
+
+### Acknowledgement
+Some of the code was adapted from https://github.com/jzbjyb/ReAtt.
