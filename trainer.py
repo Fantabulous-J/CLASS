@@ -215,7 +215,7 @@ class ReaderTrainer(object):
             batch_bias = torch.zeros(inputs_ids.size(0), device=inputs_ids.device)
         bias_chunks = torch.chunk(batch_bias, chunks=self.training_args.gc_chunk_size, dim=0)
 
-        if global_step < self.training_args.distillation_start_steps or self.training_args.only_reader:
+        if global_step < self.training_args.distillation_start_steps:
             reader_loss = 0
             for idx, (input_ids, attention_mask, independent_mask, labels, bias_scores) in \
                     enumerate(zip(input_ids_chunks, attention_mask_chunks, independent_mask_chunks, labels_chunks, bias_chunks)):
@@ -334,19 +334,7 @@ class ReaderTrainer(object):
         return all_tensors
 
     def train_step(self, batch, global_step=None):
-        if self.use_amp:
-            if version.parse(torch.__version__) > version.parse("1.7.1"):
-                with torch.cuda.amp.autocast(dtype=self.amp_dtype):
-                    kl_loss = self.compute_loss(batch, global_step)
-            else:
-                with torch.cuda.amp.autocast():
-                    kl_loss = self.compute_loss(batch, global_step)
-            self.scaler.scale(kl_loss).backward()
-        else:
-            kl_loss = self.compute_loss(batch, global_step)
-            kl_loss.backward()
-
-        return kl_loss
+        return self.compute_loss(batch, global_step)
 
     def train(self):
         global_step = 0
@@ -356,10 +344,7 @@ class ReaderTrainer(object):
             eval_result = self.refresh_passages(do_eval=True, global_step=global_step)
             if isinstance(eval_result, tuple):
                 if self.data_args.task == "XOR-Retrieve":
-                    if self.training_args.only_reader:
-                        eval_result = eval_result[1]
-                    else:
-                        eval_result = eval_result[0]
+                    eval_result = eval_result[0]
                 else:
                     eval_result = eval_result[1]
             best_eval = eval_result
@@ -413,7 +398,7 @@ class ReaderTrainer(object):
                 batch = self._prepare_inputs(batch)
                 kl_loss = self.train_step(batch, global_step)
 
-                if self.is_world_process_zero() and not self.training_args.only_reader:
+                if self.is_world_process_zero():
                     for name, param in self.model.named_parameters():
                         if param.grad is None:
                             print(name)
@@ -456,10 +441,7 @@ class ReaderTrainer(object):
                     eval_result = self.refresh_passages(do_eval=True, global_step=global_step)
                     if isinstance(eval_result, tuple):
                         if self.data_args.task == "XOR-Retrieve":
-                            if self.training_args.only_reader:
-                                eval_result = eval_result[1]
-                            else:
-                                eval_result = eval_result[0]
+                            eval_result = eval_result[0]
                         else:
                             eval_result = eval_result[1]
                     if self.is_world_process_zero() and eval_result > best_eval:
@@ -543,16 +525,9 @@ class ReaderTrainer(object):
             save_results(results, output_path)
         else:
             if refresh:
-                if self.training_args.retrieve_from_each_lang:
-                    assert len(results.keys()) == 13, len(results.keys())
-                    for lang, lang_results in results.items():
-                        output_path = os.path.join(self.training_args.output_dir,
-                                                   f"train_{lang}.split{self.training_args.process_index}.jsonl")
-                        save_results(lang_results, output_path)
-                else:
-                    output_path = os.path.join(self.training_args.output_dir,
-                                               "train.split{}.jsonl".format(self.training_args.process_index))
-                    save_results(results, output_path)
+                output_path = os.path.join(self.training_args.output_dir,
+                                           "train.split{}.jsonl".format(self.training_args.process_index))
+                save_results(results, output_path)
 
         torch.distributed.barrier()
 
@@ -774,8 +749,7 @@ class ReaderTrainer(object):
         encode_dataset = EncodeDataset(queries, self.tokenizer, max_length=self.data_args.max_query_length,
                                        is_query=True, start=start, end=end,
                                        normalize_text=self.data_args.normalize_text,
-                                       lower_case=self.data_args.lower_case, separate_joint_encoding=True,
-                                       add_lang_token=self.data_args.add_lang_token)
+                                       lower_case=self.data_args.lower_case, separate_joint_encoding=True)
         encode_loader = DataLoader(
             encode_dataset,
             batch_size=self.training_args.per_device_eval_batch_size * self.training_args.n_gpu,
@@ -845,8 +819,7 @@ class ReaderTrainer(object):
         encode_dataset = EncodeDataset(corpus, self.tokenizer, max_length=self.data_args.max_passage_length,
                                        is_query=False, start=start, end=end,
                                        normalize_text=self.data_args.normalize_text,
-                                       lower_case=self.data_args.lower_case, separate_joint_encoding=True,
-                                       add_lang_token=self.data_args.add_lang_token)
+                                       lower_case=self.data_args.lower_case, separate_joint_encoding=True)
         encode_loader = DataLoader(
             encode_dataset,
             batch_size=self.training_args.per_device_eval_batch_size * self.training_args.n_gpu,
