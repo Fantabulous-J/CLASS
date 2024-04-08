@@ -78,10 +78,6 @@ def main():
     config.n_passages = data_args.train_n_passages
     if not training_args.de_avg_pooling:
         config.retriever_head = 6
-    initialise_from_smaller_model = False
-    if config.num_layers != 24:
-        config.num_layers = config.num_layers * 2
-        initialise_from_smaller_model = True
     config.retriever_layer = config.num_layers // 2
 
     model = RRForConditionalGeneration.from_pretrained(
@@ -89,14 +85,6 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir
     )
-    if initialise_from_smaller_model:
-        for idx in range(config.num_layers // 2, config.num_layers):
-            model.encoder.block[idx] = copy.deepcopy(model.encoder.block[idx - config.num_layers // 2])
-            for module in model.encoder.block[idx].modules():
-                if hasattr(module, 'layer_index'):
-                    module.layer_index = idx
-                if hasattr(module, 'relative_attention_bias'):
-                    delattr(module, 'relative_attention_bias')
 
     teacher_tokenizer = None
     if training_args.english_distill:

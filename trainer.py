@@ -7,11 +7,9 @@ import os
 import random
 import re
 import shutil
-from itertools import chain
 from statistics import mean
 from typing import Dict, List, Tuple, Optional, Any, Union, Mapping
 
-import numpy as np
 import torch
 import torch.distributed as dist
 from packaging import version
@@ -24,8 +22,7 @@ from transformers import get_linear_schedule_with_warmup, get_constant_schedule,
 from dataloader import GenericDataLoader, EncodeDataset, EncodeCollator, ReaderDataset, ReaderCollator
 from evals.eval_xor_retrieve import read_jsonlines, evaluate_top_k_hit
 from model import RRForConditionalGeneration
-from retriever import FaissIPRetriever, write_ranking
-from utils import AverageMeter, ProgressMeter, RandContext, compute_colbert_scores, group_corpus_by_langs
+from utils import AverageMeter, ProgressMeter, RandContext, compute_colbert_scores
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +77,10 @@ class ReaderTrainer(object):
         self.model = self.setup_model(model)
         self.optimizer = self.get_optimizer(self.model, self.training_args.weight_decay,
                                             self.training_args.learning_rate)
-        if self.training_args.scheduler_type == "linear_warmup":
-            self.scheduler = get_linear_schedule_with_warmup(
-                self.optimizer, num_warmup_steps=self.training_args.warmup_ratio * self.max_step,
-                num_training_steps=self.max_step
-            )
-        else:
-            assert self.training_args.scheduler_type == "constant", self.training_args.sheduler_type
-            self.scheduler = get_constant_schedule(self.optimizer)
+        self.scheduler = get_linear_schedule_with_warmup(
+            self.optimizer, num_warmup_steps=self.training_args.warmup_ratio * self.max_step,
+            num_training_steps=self.max_step
+        )
 
         os.makedirs(self.training_args.output_dir, exist_ok=True)
 
@@ -1025,7 +1018,6 @@ class ReaderDistillTrainer(ReaderTrainer):
         else:
             if len(query_vector.size()) == 3:
                 retriever_scores = compute_colbert_scores(query_vector, passage_vector, query_mask, passage_mask)
-                print(query_vector.size(), passage_vector.size(), retriever_scores)
             else:
                 retriever_scores = torch.matmul(query_vector, passage_vector.transpose(0, 1))
         return retriever_scores

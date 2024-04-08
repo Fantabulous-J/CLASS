@@ -1,12 +1,10 @@
 import csv
 import json
 import logging
-import mmap
 import os
 import random
 from dataclasses import dataclass
 from typing import Dict, Union, List
-from nltk.tokenize import word_tokenize
 
 import torch
 from torch.utils.data import Dataset
@@ -16,7 +14,6 @@ from transformers import PreTrainedTokenizer, DataCollatorWithPadding, MT5Tokeni
 
 import normalize_text
 from arguments import DataArguments
-from utils import langid_to_lang
 
 logging.getLogger('transformers.tokenization_utils').setLevel(logging.ERROR)
 logging.getLogger('transformers.tokenization_utils_base').setLevel(logging.ERROR)
@@ -75,7 +72,7 @@ class GenericDataLoader:
         logger.info("Loading Queries...")
         self.queries = self._load_queries(self.query_file)
         logger.info("Loaded %d Queries.", len(self.queries))
-        logger.info("Query Example: %s", self.queries['0'] )
+        logger.info("Query Example: %s", list(self.queries.values())[0])
 
         return self.queries
 
