@@ -1,5 +1,5 @@
 ## Pre-training Cross-lingual Open Domain Question Answering with Large-scale Synthetic Supervision
-The source code for our Paper [Pre-training Cross-lingual Open Domain Question Answering with Large-scale Synthetic Supervision](https://arxiv.org/abs/2402.16508).
+The source code for our EMNLP 2024 Paper [Pre-training Cross-lingual Open Domain Question Answering with Large-scale Synthetic Supervision](https://arxiv.org/abs/2402.16508).
 
 ## Install environment
 ```shell
